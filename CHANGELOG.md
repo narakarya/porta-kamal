@@ -5,6 +5,12 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.2] — 2026-06-11
+
+### Fixed
+
+- Ship a classic-script runtime bundle so Porta's extension iframe inliner can load the extension without stripping `type="module"` from `app.js`.
+
 ## [0.1.1] — 2026-06-11
 
 ### Fixed

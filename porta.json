@@ -1,7 +1,7 @@
 {
   "id": "kamal",
   "name": "Kamal Deploy",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Deploy, rollback, logs, console, accessories, and custom commands via Kamal.",
   "author": "Porta",
   "activateOn": ["app:root:*"],
