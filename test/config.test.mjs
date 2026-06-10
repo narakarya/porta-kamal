@@ -1,12 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { detectConfigPath } from "../lib/config.js";
+import { shellQuote } from "../lib/shell.js";
 
 function shellWithExisting(paths) {
+  const quotedPaths = new Set(paths.map(shellQuote));
   return async (cmd) => {
-    const m = cmd.match(/test -f '([^']+)'/);
-    const path = m && m[1];
-    return { code: paths.includes(path) ? 0 : 1, stdout: "", stderr: "" };
+    const m = cmd.match(/^test -f (.+)$/);
+    const quotedPath = m && m[1];
+    return { code: quotedPaths.has(quotedPath) ? 0 : 1, stdout: "", stderr: "" };
   };
 }
 
@@ -21,6 +23,10 @@ test("falls back to top-level deploy.yml", async () => {
 test("override wins when present", async () => {
   const run = shellWithExisting(["/srv/app/custom/deploy.yml", "/srv/app/config/deploy.yml"]);
   assert.equal(await detectConfigPath(run, "/srv/app", "/srv/app/custom/deploy.yml"), "/srv/app/custom/deploy.yml");
+});
+test("paths with apostrophes are shell-quoted during detection", async () => {
+  const run = shellWithExisting(["/srv/bob's app/config/deploy.yml"]);
+  assert.equal(await detectConfigPath(run, "/srv/bob's app", null), "/srv/bob's app/config/deploy.yml");
 });
 test("override ignored when missing", async () => {
   const run = shellWithExisting(["/srv/app/config/deploy.yml"]);

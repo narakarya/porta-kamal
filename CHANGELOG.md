@@ -5,6 +5,13 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-06-11
+
+### Fixed
+
+- Quote Kamal PTY command arguments so shell operators and spaces stay inside the intended argument, fixing commands such as `server exec`.
+- Quote deploy config paths when detecting and reading `deploy.yml`, including paths with spaces or apostrophes.
+
 ## [0.1.0] — 2026-05-30
 Initial release — extracted from the porta monorepo (`extensions-bundled/kamal/`) into its own repo.
 

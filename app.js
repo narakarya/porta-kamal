@@ -3,6 +3,7 @@ import { parseAccessories } from "./lib/accessories.js";
 import { FIXED_COMMANDS, buildAccessoryCommands, groupCommands } from "./lib/commands.js";
 import { CustomStore } from "./lib/custom.js";
 import { detectConfigPath } from "./lib/config.js";
+import { shellQuote } from "./lib/shell.js";
 import { KamalTerminal } from "./lib/term.js";
 
 const bridge = window.portaBridge;
@@ -59,7 +60,7 @@ async function loadConfig() {
   state.configPath = await detectConfigPath(runShell, rootDir, ovr);
   if (state.configPath) {
     state.workDir = kamalWorkDir(state.configPath);
-    const cat = await runShell(`cat '${state.configPath}'`);
+    const cat = await runShell(`cat ${shellQuote(state.configPath)}`);
     state.accessories = cat.code === 0 ? parseAccessories(cat.stdout) : [];
   } else {
     state.workDir = rootDir;
