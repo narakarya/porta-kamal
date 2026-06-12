@@ -5,6 +5,14 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.3] — 2026-06-13
+
+### Fixed
+
+- Load vendored xterm through an HTML-safe bootstrap so Porta's `srcdoc`
+  extension inliner cannot mangle comparison operators inside the minified
+  vendor bundle.
+
 ## [0.1.2] — 2026-06-11
 
 ### Fixed

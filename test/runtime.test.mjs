@@ -20,3 +20,45 @@ test("runtime scripts remain valid when Porta inlines them as classic scripts", 
     assert.doesNotThrow(() => new vm.Script(js, { filename: src }), src);
   }
 });
+
+test("xterm bootstrap is safe to inline through srcdoc", () => {
+  const js = fs.readFileSync("vendor/xterm.js", "utf8");
+  assert.equal(js.includes("<"), false);
+  assert.equal(js.includes(">"), false);
+  assert.equal(/<\/script/i.test(js), false);
+
+  let inserted = null;
+  const scriptNode = {
+    setAttribute() {},
+    text: "",
+  };
+  const document = {
+    currentScript: {
+      parentNode: {
+        insertBefore(node) {
+          inserted = node.text;
+        },
+      },
+      nextSibling: null,
+    },
+    createElement(tag) {
+      assert.equal(tag, "script");
+      return scriptNode;
+    },
+    head: {
+      appendChild(node) {
+        inserted = node.text;
+      },
+    },
+  };
+
+  vm.runInNewContext(js, {
+    atob: (value) => Buffer.from(value, "base64").toString("binary"),
+    document,
+    TextDecoder,
+    Uint8Array,
+  }, { filename: "vendor/xterm.js" });
+
+  assert.ok(inserted);
+  assert.doesNotThrow(() => new vm.Script(inserted, { filename: "vendor/xterm.raw.js" }));
+});
