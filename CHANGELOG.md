@@ -5,6 +5,16 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.2.4] — 2026-06-13
+
+### Fixed
+
+- Remove SSH_AUTH_SOCK Docker volume/env flags from Docker-based Kamal aliases
+  when running inside Porta, avoiding invalid launchd socket paths being parsed
+  as Docker volume names.
+- Show a neutral `checking kamal...` status during startup instead of flashing
+  `kamal not found` before detection finishes.
+
 ## [0.2.3] — 2026-06-13
 
 ### Fixed

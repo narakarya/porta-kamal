@@ -404,6 +404,17 @@ html, body {
   font-weight: 500;
 }
 
+.kamal-checking {
+  font-size: 11px;
+  color: #a1a1aa;
+  font-weight: 500;
+}
+
+.btn:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
 .cfg-pill,
 .run-pill {
   display: inline-flex;

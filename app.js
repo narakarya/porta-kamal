@@ -17,7 +17,7 @@ const sidebarEl = $("sidebar");
 const statusEl = $("status-bar");
 const outputHostEl = $("output-host");
 
-const APP_VERSION = "0.2.3";
+const APP_VERSION = "0.2.4";
 const rootDir = bridge.app.rootDir;
 const custom = new CustomStore(bridge.storage);
 const runShell = (cmd, opts = {}) => bridge.shell.run(loginShellCommand(cmd), opts);
@@ -38,6 +38,7 @@ const INSTALL_CMD =
 
 const state = {
   installed: false,
+  checkingKamal: true,
   version: null,
   kamalCommand: "kamal",
   kamalDisplay: "kamal",
@@ -55,31 +56,38 @@ let runCounter = 0;
 bridge.ui.setTitle("Kamal - " + bridge.app.name);
 
 async function checkKamal() {
-  const alias = await runShell("alias kamal 2>/dev/null || true");
-  const aliasCommand = parseAliasCommand(alias.stdout || alias.stderr || "", "kamal");
-  if (aliasCommand) {
-    state.installed = true;
-    state.kamalCommand = normalizeDockerKamalCommand(aliasCommand);
-    state.kamalDisplay = "kamal";
-    state.version = aliasCommand.includes("docker run") ? "docker image" : "alias";
-    return;
-  }
+  state.checkingKamal = true;
+  renderStatus();
+  try {
+    const alias = await runShell("alias kamal 2>/dev/null || true");
+    const aliasCommand = parseAliasCommand(alias.stdout || alias.stderr || "", "kamal");
+    if (aliasCommand) {
+      state.installed = true;
+      state.kamalCommand = normalizeDockerKamalCommand(aliasCommand);
+      state.kamalDisplay = "kamal";
+      state.version = aliasCommand.includes("docker run") ? "docker image" : "alias";
+      return;
+    }
 
-  const found = await runShell("command -v kamal");
-  const path = (found.stdout || "").trim().split("\n").pop() || "";
-  state.installed = found.code === 0 && !!path;
-  if (!state.installed) {
-    state.version = null;
+    const found = await runShell("command -v kamal");
+    const path = (found.stdout || "").trim().split("\n").pop() || "";
+    state.installed = found.code === 0 && !!path;
+    if (!state.installed) {
+      state.version = null;
+      state.kamalCommand = "kamal";
+      state.kamalDisplay = "kamal";
+      return;
+    }
     state.kamalCommand = "kamal";
     state.kamalDisplay = "kamal";
-    return;
-  }
-  state.kamalCommand = "kamal";
-  state.kamalDisplay = "kamal";
 
-  const version = await runShell("kamal version 2>/dev/null || kamal --version 2>/dev/null || true");
-  const label = ((version.stdout || version.stderr || "").trim().split("\n").pop() || path).trim();
-  state.version = label.replace(/^kamal\s+/i, "");
+    const version = await runShell("kamal version 2>/dev/null || kamal --version 2>/dev/null || true");
+    const label = ((version.stdout || version.stderr || "").trim().split("\n").pop() || path).trim();
+    state.version = label.replace(/^kamal\s+/i, "");
+  } finally {
+    state.checkingKamal = false;
+    renderStatus();
+  }
 }
 
 async function loadConfig() {
@@ -211,7 +219,9 @@ function el(tag, props = {}, children = []) {
 function renderStatus() {
   statusEl.innerHTML = "";
   const left = el("div", { className: "status-left" });
-  if (state.installed) {
+  if (state.checkingKamal) {
+    left.append(el("span", { className: "kamal-checking", textContent: "checking kamal..." }));
+  } else if (state.installed) {
     left.append(el("span", { className: "kamal-version", textContent: "kamal " + (state.version || "installed") }));
   } else {
     left.append(el("span", { className: "kamal-missing", textContent: "kamal not found" }));
@@ -220,6 +230,7 @@ function renderStatus() {
     left.append(btn);
   }
   const recheck = el("button", { className: "btn", textContent: "Re-check" });
+  recheck.disabled = state.checkingKamal;
   recheck.onclick = async () => { await checkKamal(); renderStatus(); };
   left.append(recheck);
 
