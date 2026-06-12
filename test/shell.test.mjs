@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { commandWithArgs, loginShellCommand, parseAliasCommand, shellQuote, shellJoin, stripDockerTty } from "../lib/shell.js";
+import { commandWithArgs, loginShellCommand, normalizeDockerKamalCommand, parseAliasCommand, shellQuote, shellJoin, stripDockerTty } from "../lib/shell.js";
 
 test("shellQuote leaves simple arguments readable", () => {
   assert.equal(shellQuote("/srv/app/config/deploy.yml"), "/srv/app/config/deploy.yml");
@@ -31,4 +31,12 @@ test("stripDockerTty removes tty flags but keeps stdin flag", () => {
 
 test("commandWithArgs appends quoted args to a command template", () => {
   assert.equal(commandWithArgs("docker run -i image", ["server", "exec", "hostname && uname -a"]), "docker run -i image server exec 'hostname && uname -a'");
+});
+
+test("normalizeDockerKamalCommand removes tty, protects empty ssh agent, and sets workdir", () => {
+  const command = 'docker run -it --rm -v "${PWD}:/workdir" -v "${SSH_AUTH_SOCK}:/ssh-agent" -e SSH_AUTH_SOCK="/ssh-agent" ghcr.io/basecamp/kamal:latest';
+  assert.equal(
+    normalizeDockerKamalCommand(command),
+    'docker run -i --rm -v "${PWD}:/workdir" ${SSH_AUTH_SOCK:+-v "${SSH_AUTH_SOCK}:/ssh-agent" -e SSH_AUTH_SOCK="/ssh-agent"} -w /workdir ghcr.io/basecamp/kamal:latest',
+  );
 });

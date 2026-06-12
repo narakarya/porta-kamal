@@ -5,6 +5,16 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.2.3] — 2026-06-13
+
+### Fixed
+
+- Normalize Docker-based Kamal aliases more aggressively by making the
+  SSH_AUTH_SOCK mount conditional and adding `/workdir` as the container
+  working directory when the alias mounts the app there.
+- Remove blocking confirm dialogs from command clicks and make the output panel
+  more compact.
+
 ## [0.2.2] — 2026-06-13
 
 ### Fixed

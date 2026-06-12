@@ -3,7 +3,7 @@ import { parseAccessories } from "./lib/accessories.js";
 import { FIXED_COMMANDS, buildAccessoryCommands, groupCommands } from "./lib/commands.js";
 import { CustomStore } from "./lib/custom.js";
 import { detectConfigPath } from "./lib/config.js";
-import { commandWithArgs, loginShellCommand, parseAliasCommand, shellJoin, shellQuote, stripDockerTty } from "./lib/shell.js";
+import { commandWithArgs, loginShellCommand, normalizeDockerKamalCommand, parseAliasCommand, shellJoin, shellQuote } from "./lib/shell.js";
 
 const bridge = window.portaBridge;
 const $ = (id) => document.getElementById(id);
@@ -17,7 +17,7 @@ const sidebarEl = $("sidebar");
 const statusEl = $("status-bar");
 const outputHostEl = $("output-host");
 
-const APP_VERSION = "0.2.2";
+const APP_VERSION = "0.2.3";
 const rootDir = bridge.app.rootDir;
 const custom = new CustomStore(bridge.storage);
 const runShell = (cmd, opts = {}) => bridge.shell.run(loginShellCommand(cmd), opts);
@@ -59,7 +59,7 @@ async function checkKamal() {
   const aliasCommand = parseAliasCommand(alias.stdout || alias.stderr || "", "kamal");
   if (aliasCommand) {
     state.installed = true;
-    state.kamalCommand = stripDockerTty(aliasCommand);
+    state.kamalCommand = normalizeDockerKamalCommand(aliasCommand);
     state.kamalDisplay = "kamal";
     state.version = aliasCommand.includes("docker run") ? "docker image" : "alias";
     return;
@@ -114,8 +114,10 @@ function isRunning() {
 }
 
 async function runCommand(cmd) {
-  if (isRunning() && !confirm("A command is still running. Start another command anyway?")) return;
-  if (cmd.confirm && !confirm(`Run: ${kamalDisplayLine(cmd)} ?`)) return;
+  if (isRunning()) {
+    bridge.ui.toast("A command is still running", "info");
+    return;
+  }
   state.selectedId = cmd.id;
   await runTask({
     title: cmd.label,
@@ -127,7 +129,10 @@ async function runCommand(cmd) {
 }
 
 async function installKamal() {
-  if (isRunning() && !confirm("A command is still running. Start install anyway?")) return;
+  if (isRunning()) {
+    bridge.ui.toast("A command is still running", "info");
+    return;
+  }
   await runTask({
     title: "Install Kamal",
     command: INSTALL_CMD,
@@ -247,14 +252,19 @@ function renderOutput() {
     el("span", { textContent: run.title }),
     el("span", { className: "run-pill " + run.status, textContent: run.status }),
   ]);
+  const meta = el("div", { className: "output-meta", textContent: run.displayCommand });
   header.title = run.displayCommand;
-  header.append(title);
+  header.append(title, meta);
   outputHostEl.append(header);
 
   if (run.error) outputHostEl.append(el("pre", { className: "output-block stderr", textContent: run.error }));
   const lines = run.output;
   if (lines.length === 0 && run.status === "running") {
-    outputHostEl.append(el("div", { className: "output-wait", textContent: "Waiting for output..." }));
+    outputHostEl.append(el("div", { className: "output-wait", textContent: "Running command..." }));
+    return;
+  }
+  if (lines.length === 0) {
+    outputHostEl.append(el("div", { className: "output-wait", textContent: "No output." }));
     return;
   }
   const block = el("pre", { className: "output-block" });
