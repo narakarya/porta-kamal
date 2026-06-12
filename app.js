@@ -3,8 +3,7 @@ import { parseAccessories } from "./lib/accessories.js";
 import { FIXED_COMMANDS, buildAccessoryCommands, groupCommands } from "./lib/commands.js";
 import { CustomStore } from "./lib/custom.js";
 import { detectConfigPath } from "./lib/config.js";
-import { loginShellCommand, shellQuote } from "./lib/shell.js";
-import { KamalTerminal } from "./lib/term.js";
+import { loginShellCommand, shellJoin, shellQuote } from "./lib/shell.js";
 
 const bridge = window.portaBridge;
 const $ = (id) => document.getElementById(id);
@@ -16,18 +15,15 @@ if (!bridge) {
 
 const sidebarEl = $("sidebar");
 const statusEl = $("status-bar");
-const termHostEl = $("term-host");
+const outputHostEl = $("output-host");
 
 const rootDir = bridge.app.rootDir;
 const custom = new CustomStore(bridge.storage);
-const runShell = (cmd) => bridge.shell.run(loginShellCommand(cmd));
+const runShell = (cmd, opts = {}) => bridge.shell.run(loginShellCommand(cmd), opts);
+const spawnShell = (cmd, opts = {}, callbacks = {}) => bridge.shell.spawn(loginShellCommand(cmd), opts, callbacks);
 
-const SEARCH_THRESHOLD = 12; // show the filter box once the list is long
-
-// Mirrors src-tauri/src/commands/deploy.rs `install_kamal`: use
-// `gem install kamal` when the gemdir is writable, else fall back to
-// `gem install kamal --user-install`. The extension can't call libc, so the
-// writability check is done in shell.
+const SEARCH_THRESHOLD = 12;
+const COMMAND_TIMEOUT = 15 * 60 * 1000;
 const INSTALL_CMD =
   'if [ -w "$(gem env gemdir 2>/dev/null)" ]; then gem install kamal; else gem install kamal --user-install; fi';
 
@@ -40,14 +36,13 @@ const state = {
   commands: [],
   search: "",
   selectedId: null,
-  editingCustomId: null, // null = not editing; "" = adding new
+  editingCustomId: null,
+  run: null,
 };
-let term = null;
-let termCounter = 0;
+let runCounter = 0;
 
-bridge.ui.setTitle("Kamal — " + bridge.app.name);
+bridge.ui.setTitle("Kamal - " + bridge.app.name);
 
-// ── data loading ──────────────────────────────────────────────────────────
 async function checkKamal() {
   const found = await runShell("command -v kamal");
   const path = (found.stdout || "").trim().split("\n").pop() || "";
@@ -81,56 +76,95 @@ async function rebuildCommands() {
   state.commands = [...FIXED_COMMANDS, ...buildAccessoryCommands(state.accessories), ...customDefs];
 }
 
-// ── terminal ──────────────────────────────────────────────────────────────
-function freshTerminal() {
-  if (!window.Terminal) throw new Error("xterm.js did not load");
-  if (!window.FitAddon || !window.FitAddon.FitAddon) throw new Error("xterm fit addon did not load");
-  if (term) { term.dispose(); term = null; }
-  termHostEl.innerHTML = "";
-  const termId = "kamal-" + (++termCounter);
-  term = new KamalTerminal({
-    Terminal: window.Terminal,
-    FitAddon: window.FitAddon.FitAddon,
-    bridge,
-    hostEl: termHostEl,
-    termId,
-  });
-  return term;
+function kamalCommandLine(cmd) {
+  return shellJoin(["kamal", ...cmd.args]);
+}
+
+function isRunning() {
+  return state.run && state.run.status === "running";
 }
 
 async function runCommand(cmd) {
-  if (cmd.confirm && !confirm(`Run: kamal ${cmd.args.join(" ")} ?`)) return;
+  if (isRunning() && !confirm("A command is still running. Start another command anyway?")) return;
+  if (cmd.confirm && !confirm(`Run: ${kamalCommandLine(cmd)} ?`)) return;
   state.selectedId = cmd.id;
-  let t;
-  try {
-    t = freshTerminal();
-    await t.open(state.workDir);
-  } catch (err) {
-    bridge.ui.toast("Could not open terminal: " + (err && err.message ? err.message : String(err)), "error");
-    return;
-  }
-  // PTY stdin is always wired (KamalTerminal forwards keystrokes), so interactive
-  // commands work without branching on cmd.interactive.
-  t.run(cmd.args);
-  renderStatus();
+  await runTask({
+    title: cmd.label,
+    command: kamalCommandLine(cmd),
+    timeout: COMMAND_TIMEOUT,
+  });
   renderSidebar();
 }
 
-async function installKamal(installCmd) {
-  let t;
-  try {
-    t = freshTerminal();
-    await t.open(state.workDir);
-  } catch (err) {
-    bridge.ui.toast("Could not open terminal: " + (err && err.message ? err.message : String(err)), "error");
-    return;
-  }
-  t.runRaw(installCmd);
-  // After the shell finishes, the user clicks "Re-check" to refresh status.
-  renderStatus();
+async function installKamal() {
+  if (isRunning() && !confirm("A command is still running. Start install anyway?")) return;
+  await runTask({
+    title: "Install Kamal",
+    command: INSTALL_CMD,
+    timeout: COMMAND_TIMEOUT,
+    onDone: async () => {
+      await checkKamal();
+      renderStatus();
+    },
+  });
 }
 
-// ── rendering ───────────────────────────────────────────────────────────────
+async function runTask({ title, command, timeout, onDone }) {
+  const id = ++runCounter;
+  state.run = {
+    id,
+    title,
+    command,
+    cwd: state.workDir,
+    status: "running",
+    code: null,
+    timedOut: false,
+    stdout: [],
+    stderr: [],
+    output: [],
+    error: null,
+    startedAt: new Date(),
+    finishedAt: null,
+  };
+  renderStatus();
+  renderOutput();
+
+  const append = (channel, line) => {
+    if (!state.run || state.run.id !== id) return;
+    state.run[channel].push(line);
+    state.run.output.push({ channel, line });
+    renderOutput();
+  };
+
+  try {
+    const result = await spawnShell(command, { cwd: state.workDir, timeout }, {
+      onStdout: (line) => append("stdout", line),
+      onStderr: (line) => append("stderr", line),
+    });
+    if (!state.run || state.run.id !== id) return;
+    state.run.code = result.code;
+    state.run.timedOut = !!result.timed_out;
+    state.run.status = result.code === 0 && !result.timed_out ? "success" : "failed";
+    state.run.finishedAt = new Date();
+    bridge.ui.toast(
+      state.run.status === "success" ? `${title} finished` : `${title} failed`,
+      state.run.status === "success" ? "success" : "error",
+    );
+  } catch (err) {
+    if (!state.run || state.run.id !== id) return;
+    state.run.status = "failed";
+    state.run.error = err && err.message ? err.message : String(err);
+    state.run.finishedAt = new Date();
+    bridge.ui.toast(`${title} failed: ${state.run.error}`, "error");
+  } finally {
+    if (state.run && state.run.id === id) {
+      await (onDone ? onDone() : undefined);
+      renderStatus();
+      renderOutput();
+    }
+  }
+}
+
 function el(tag, props = {}, children = []) {
   const node = document.createElement(tag);
   Object.assign(node, props);
@@ -142,21 +176,62 @@ function renderStatus() {
   statusEl.innerHTML = "";
   const left = el("div", { className: "status-left" });
   if (state.installed) {
-    left.append(el("span", { className: "kamal-version", textContent: "kamal " + (state.version || "") }));
+    left.append(el("span", { className: "kamal-version", textContent: "kamal " + (state.version || "installed") }));
   } else {
     left.append(el("span", { className: "kamal-missing", textContent: "kamal not found" }));
     const btn = el("button", { className: "btn", textContent: "Install Kamal" });
-    btn.onclick = () => installKamal(INSTALL_CMD);
+    btn.onclick = installKamal;
     left.append(btn);
-    const recheck = el("button", { className: "btn", textContent: "Re-check" });
-    recheck.onclick = async () => { await checkKamal(); renderStatus(); };
-    left.append(recheck);
   }
+  const recheck = el("button", { className: "btn", textContent: "Re-check" });
+  recheck.onclick = async () => { await checkKamal(); renderStatus(); };
+  left.append(recheck);
+
   const right = el("div", { className: "status-right" });
-  const cancel = el("button", { className: "btn", textContent: "Cancel (Ctrl-C)" });
-  cancel.onclick = () => term && term.cancel();
-  right.append(cancel);
+  if (state.configPath) {
+    right.append(el("span", { className: "cfg-pill", title: state.configPath, textContent: state.configPath.replace(rootDir + "/", "") }));
+  }
+  if (isRunning()) {
+    right.append(el("span", { className: "run-pill running", textContent: "Running" }));
+  }
   statusEl.append(left, right);
+}
+
+function renderOutput() {
+  outputHostEl.innerHTML = "";
+  const run = state.run;
+  if (!run) {
+    outputHostEl.append(
+      el("div", { className: "empty-state" }, [
+        el("div", { className: "empty-title", textContent: "Select a Kamal command" }),
+        el("div", { className: "empty-copy", textContent: "Results, errors, and command output will appear here." }),
+      ]),
+    );
+    return;
+  }
+
+  const header = el("div", { className: "output-header" });
+  const title = el("div", { className: "output-title" }, [
+    el("span", { textContent: run.title }),
+    el("span", { className: "run-pill " + run.status, textContent: run.status }),
+  ]);
+  const meta = el("div", { className: "output-meta", textContent: run.command });
+  const cwd = el("div", { className: "output-cwd", textContent: "cwd: " + run.cwd });
+  header.append(title, meta, cwd);
+  outputHostEl.append(header);
+
+  if (run.error) outputHostEl.append(el("pre", { className: "output-block stderr", textContent: run.error }));
+  const lines = run.output;
+  if (lines.length === 0 && run.status === "running") {
+    outputHostEl.append(el("div", { className: "output-wait", textContent: "Waiting for output..." }));
+    return;
+  }
+  const block = el("pre", { className: "output-block" });
+  for (const entry of lines) {
+    const row = el("div", { className: "output-line " + entry.channel, textContent: entry.line });
+    block.append(row);
+  }
+  outputHostEl.append(block);
 }
 
 function commandMatches(cmd) {
@@ -165,7 +240,6 @@ function commandMatches(cmd) {
 }
 
 function renderSidebar() {
-  // No-config path: full rebuild is fine (no persistent search box).
   if (!state.configPath) {
     sidebarEl.innerHTML = "";
     sidebarEl.append(el("div", { className: "notice", textContent: "No deploy.yml found under " + rootDir }));
@@ -181,16 +255,13 @@ function renderSidebar() {
     return;
   }
 
-  // Build the stable shell (search box + list container) once. Recreating the
-  // search input on every keystroke would drop focus, so it lives across
-  // renderCommandList() calls.
   let listEl = document.getElementById("sidebar-list");
   if (!listEl) {
     sidebarEl.innerHTML = "";
     if (state.commands.length >= SEARCH_THRESHOLD) {
       const search = el("input", {
         id: "sidebar-search", className: "search",
-        placeholder: "Filter commands…", value: state.search,
+        placeholder: "Filter commands...", value: state.search,
       });
       search.oninput = (e) => { state.search = e.target.value; renderCommandList(); };
       sidebarEl.append(search);
@@ -217,9 +288,9 @@ function renderCommandList() {
       row.onclick = () => runCommand(cmd);
       if (cmd.group === "Custom") {
         const id = cmd.id.replace(/^custom-/, "");
-        const edit = el("button", { className: "icon-btn", textContent: "✎", title: "Edit" });
+        const edit = el("button", { className: "icon-btn", textContent: "Edit", title: "Edit", type: "button" });
         edit.onclick = (e) => { e.stopPropagation(); openCustomForm(id); };
-        const del = el("button", { className: "icon-btn", textContent: "✕", title: "Delete" });
+        const del = el("button", { className: "icon-btn", textContent: "Del", title: "Delete", type: "button" });
         del.onclick = async (e) => { e.stopPropagation(); await custom.remove(id); await rebuildCommands(); renderSidebar(); };
         row.append(edit, del);
       }
@@ -227,7 +298,7 @@ function renderCommandList() {
     }
   }
 
-  const addCustom = el("button", { className: "btn add-custom", textContent: "＋ Custom command" });
+  const addCustom = el("button", { className: "btn add-custom", textContent: "+ Custom command", type: "button" });
   addCustom.onclick = () => openCustomForm("");
   listEl.append(addCustom);
 
@@ -240,9 +311,9 @@ async function openCustomForm(id) {
   if (id) {
     const list = await custom.list();
     const found = list.find((c) => c.id === id);
-    _editDraft = found ? { label: found.label, args: found.args.join(" "), interactive: found.interactive } : { label: "", args: "", interactive: false };
+    _editDraft = found ? { label: found.label, args: found.args.join(" ") } : { label: "", args: "" };
   } else {
-    _editDraft = { label: "", args: "", interactive: false };
+    _editDraft = { label: "", args: "" };
   }
   renderSidebar();
 }
@@ -250,14 +321,12 @@ async function openCustomForm(id) {
 function renderCustomForm() {
   const form = el("div", { className: "custom-form" });
   const label = el("input", { className: "cf-label", placeholder: "Label", value: _editDraft.label });
-  const args = el("input", { className: "cf-args", placeholder: "args e.g. console", value: _editDraft.args });
-  const save = el("button", { className: "btn", textContent: "Save" });
+  const args = el("input", { className: "cf-args", placeholder: "args e.g. app logs", value: _editDraft.args });
+  const save = el("button", { className: "btn", textContent: "Save", type: "button" });
   save.onclick = async () => {
     const payload = {
       label: label.value.trim(),
       args: args.value.trim().split(/\s+/).filter(Boolean),
-      // PTY always forwards stdin, so there's no interactive branch; keep the
-      // field for data parity (CustomStore defaults it).
       interactive: false,
     };
     if (!payload.label || payload.args.length === 0) return;
@@ -267,33 +336,28 @@ function renderCustomForm() {
     await rebuildCommands();
     renderSidebar();
   };
-  const cancel = el("button", { className: "btn", textContent: "Cancel" });
+  const cancel = el("button", { className: "btn", textContent: "Cancel", type: "button" });
   cancel.onclick = () => { state.editingCustomId = null; renderSidebar(); };
   form.append(label, args, save, cancel);
   return form;
 }
 
-// ── lifecycle ────────────────────────────────────────────────────────────────
 async function reload() {
   await loadConfig();
   await rebuildCommands();
   renderStatus();
-  // Reload isn't triggered by typing, so a clean rebuild is safe and lets the
-  // search-box shell reflect a changed command count / threshold crossing.
   sidebarEl.innerHTML = "";
   renderSidebar();
+  renderOutput();
 }
 
 async function main() {
   try {
     renderStatus();
-    sidebarEl.append(el("div", { className: "loading", textContent: "Loading…" }));
+    renderOutput();
+    sidebarEl.append(el("div", { className: "loading", textContent: "Loading..." }));
     await checkKamal();
     await reload();
-
-    // Keep the terminal sized to its container.
-    const ro = new ResizeObserver(() => { if (term) term.resize(); });
-    ro.observe(termHostEl);
   } catch (err) {
     sidebarEl.innerHTML = "";
     sidebarEl.append(el("div", { className: "notice", textContent: "Load failed: " + (err && err.message ? err.message : String(err)) }));

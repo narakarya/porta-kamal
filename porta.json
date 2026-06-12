@@ -1,11 +1,11 @@
 {
   "id": "kamal",
   "name": "Kamal Deploy",
-  "version": "0.1.5",
-  "description": "Deploy, rollback, logs, console, accessories, and custom commands via Kamal.",
+  "version": "0.2.0",
+  "description": "Deploy, rollback, logs, app lifecycle, accessories, and custom commands via Kamal.",
   "author": "Porta",
   "activateOn": ["app:root:*"],
-  "permissions": ["shell", "terminal", "storage"],
+  "permissions": ["shell", "storage"],
   "main": "index.html",
   "contributes": {
     "appActions": [

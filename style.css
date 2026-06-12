@@ -70,20 +70,99 @@ html, body {
   flex-shrink: 0;
 }
 
-/* ── Terminal host ────────────────────────────────────── */
-#term-host {
+/* ── Output host ──────────────────────────────────────── */
+#output-host {
   flex: 1;
   min-height: 0;
-  overflow: hidden;
-}
-
-/* xterm fills its container */
-#term-host .xterm {
-  height: 100%;
-}
-
-#term-host .xterm-viewport {
   overflow-y: auto;
+  background: #0d0d0f;
+  padding: 14px;
+}
+
+.empty-state {
+  height: 100%;
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  color: #71717a;
+  text-align: center;
+}
+
+.empty-title {
+  color: #e4e4e7;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.empty-copy {
+  font-size: 12px;
+}
+
+.output-header {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 12px;
+  background: #141417;
+  border: 1px solid #27272a;
+  border-radius: 6px;
+  margin-bottom: 10px;
+}
+
+.output-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: #f4f4f5;
+  font-weight: 600;
+}
+
+.output-meta,
+.output-cwd {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  color: #a1a1aa;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.output-cwd {
+  color: #71717a;
+}
+
+.output-block {
+  margin: 0;
+  padding: 10px 12px;
+  min-height: 180px;
+  background: #0a0a0b;
+  border: 1px solid #27272a;
+  border-radius: 6px;
+  color: #d4d4d8;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.output-block.stderr,
+.output-line.stderr {
+  color: #fca5a5;
+}
+
+.output-line.stdout {
+  color: #d4d4d8;
+}
+
+.output-wait {
+  padding: 18px 12px;
+  color: #71717a;
+  font-size: 12px;
 }
 
 /* ── Sidebar: no-config state ─────────────────────────── */
@@ -161,12 +240,17 @@ html, body {
   display: flex;
   flex-direction: row;
   align-items: center;
+  width: calc(100% - 12px);
   padding: 5px 8px 5px 12px;
   cursor: pointer;
   border-radius: 5px;
   margin: 1px 6px;
+  background: transparent;
+  border: 0;
   transition: background 0.1s;
   border-left: 2px solid transparent;
+  font-family: inherit;
+  text-align: left;
 }
 
 .cmd-row:hover {
@@ -322,6 +406,43 @@ html, body {
   font-weight: 500;
 }
 
+.cfg-pill,
+.run-pill {
+  display: inline-flex;
+  align-items: center;
+  max-width: 320px;
+  padding: 2px 7px;
+  border: 1px solid #3f3f46;
+  border-radius: 999px;
+  color: #a1a1aa;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.run-pill {
+  text-transform: capitalize;
+}
+
+.run-pill.running {
+  color: #93c5fd;
+  border-color: #1d4ed8;
+  background: rgba(29, 78, 216, 0.16);
+}
+
+.run-pill.success {
+  color: #86efac;
+  border-color: #166534;
+  background: rgba(22, 101, 52, 0.16);
+}
+
+.run-pill.failed {
+  color: #fca5a5;
+  border-color: #991b1b;
+  background: rgba(153, 27, 27, 0.16);
+}
+
 /* ── Loading state ────────────────────────────────────── */
 .loading {
   padding: 12px;
@@ -346,4 +467,17 @@ html, body {
 
 #sidebar::-webkit-scrollbar-thumb:hover {
   background: #52525b;
+}
+
+#output-host::-webkit-scrollbar {
+  width: 8px;
+}
+
+#output-host::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#output-host::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 4px;
 }

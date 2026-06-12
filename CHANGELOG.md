@@ -5,6 +5,16 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-06-13
+
+### Changed
+
+- Rewrite the extension as a regular app-style command panel using Porta's
+  streaming shell bridge instead of an embedded xterm.js PTY.
+- Remove interactive shell entries and use non-following log commands so menu
+  actions finish predictably and display stdout/stderr in the output panel.
+- Drop the `terminal` permission and vendored xterm assets.
+
 ## [0.1.5] — 2026-06-13
 
 ### Fixed
