@@ -5,6 +5,16 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.4] — 2026-06-13
+
+### Fixed
+
+- Run Kamal detection and terminal commands through the user's login shell so
+  PATH entries from Ruby managers such as mise, rbenv, asdf, or user gem bins
+  are available inside Porta's extension host.
+- Show terminal load errors as toasts when a command button is clicked instead
+  of failing silently before the PTY opens.
+
 ## [0.1.3] — 2026-06-13
 
 ### Fixed

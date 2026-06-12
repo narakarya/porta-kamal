@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { shellQuote, shellJoin } from "../lib/shell.js";
+import { loginShellCommand, shellQuote, shellJoin } from "../lib/shell.js";
 import { kamalCommandLine } from "../lib/term.js";
 
 test("shellQuote leaves simple arguments readable", () => {
@@ -16,5 +16,12 @@ test("shellJoin preserves shell operators inside one argument", () => {
 });
 
 test("kamalCommandLine quotes command arguments before typing into the PTY", () => {
-  assert.equal(kamalCommandLine(["server", "exec", "hostname && uname -a"]), "kamal server exec 'hostname && uname -a'");
+  assert.equal(
+    kamalCommandLine(["server", "exec", "hostname && uname -a"]),
+    "/bin/zsh -lic 'kamal server exec '\"'\"'hostname && uname -a'\"'\"''",
+  );
+});
+
+test("loginShellCommand loads user shell startup files for PATH-sensitive commands", () => {
+  assert.equal(loginShellCommand("kamal version"), "/bin/zsh -lic 'kamal version'");
 });

@@ -3,7 +3,7 @@ import { parseAccessories } from "./lib/accessories.js";
 import { FIXED_COMMANDS, buildAccessoryCommands, groupCommands } from "./lib/commands.js";
 import { CustomStore } from "./lib/custom.js";
 import { detectConfigPath } from "./lib/config.js";
-import { shellQuote } from "./lib/shell.js";
+import { loginShellCommand, shellQuote } from "./lib/shell.js";
 import { KamalTerminal } from "./lib/term.js";
 
 const bridge = window.portaBridge;
@@ -20,7 +20,7 @@ const termHostEl = $("term-host");
 
 const rootDir = bridge.app.rootDir;
 const custom = new CustomStore(bridge.storage);
-const runShell = (cmd) => bridge.shell.run(cmd);
+const runShell = (cmd) => bridge.shell.run(loginShellCommand(cmd));
 
 const SEARCH_THRESHOLD = 12; // show the filter box once the list is long
 
@@ -75,6 +75,8 @@ async function rebuildCommands() {
 
 // ── terminal ──────────────────────────────────────────────────────────────
 function freshTerminal() {
+  if (!window.Terminal) throw new Error("xterm.js did not load");
+  if (!window.FitAddon || !window.FitAddon.FitAddon) throw new Error("xterm fit addon did not load");
   if (term) { term.dispose(); term = null; }
   termHostEl.innerHTML = "";
   const termId = "kamal-" + (++termCounter);
@@ -91,8 +93,9 @@ function freshTerminal() {
 async function runCommand(cmd) {
   if (cmd.confirm && !confirm(`Run: kamal ${cmd.args.join(" ")} ?`)) return;
   state.selectedId = cmd.id;
-  const t = freshTerminal();
+  let t;
   try {
+    t = freshTerminal();
     await t.open(state.workDir);
   } catch (err) {
     bridge.ui.toast("Could not open terminal: " + (err && err.message ? err.message : String(err)), "error");
@@ -106,8 +109,9 @@ async function runCommand(cmd) {
 }
 
 async function installKamal(installCmd) {
-  const t = freshTerminal();
+  let t;
   try {
+    t = freshTerminal();
     await t.open(state.workDir);
   } catch (err) {
     bridge.ui.toast("Could not open terminal: " + (err && err.message ? err.message : String(err)), "error");

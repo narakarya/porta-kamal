@@ -10,6 +10,10 @@
     return parts.map(shellQuote).join(" ");
   }
 
+  function loginShellCommand(command) {
+    return "/bin/zsh -lic " + shellQuote(command);
+  }
+
   function kamalWorkDir(configPath) {
     if (configPath.endsWith("/config/deploy.yml")) {
       return configPath.split("/").slice(0, -2).join("/") || "/";
@@ -120,7 +124,7 @@
   }
 
   function kamalCommandLine(args) {
-    return shellJoin(["kamal"].concat(args));
+    return loginShellCommand(shellJoin(["kamal"].concat(args)));
   }
 
   function KamalTerminal(opts) {
@@ -157,7 +161,7 @@
     this.bridge.terminal.write(this.termId, new TextEncoder().encode(kamalCommandLine(args) + "\r"));
   };
   KamalTerminal.prototype.runRaw = function (line) {
-    this.bridge.terminal.write(this.termId, new TextEncoder().encode(line + "\r"));
+    this.bridge.terminal.write(this.termId, new TextEncoder().encode(loginShellCommand(line) + "\r"));
   };
   KamalTerminal.prototype.cancel = function () {
     this.bridge.terminal.write(this.termId, new Uint8Array([0x03]));
@@ -188,7 +192,7 @@
   var termHostEl = $("term-host");
   var rootDir = bridge.app.rootDir;
   var custom = new CustomStore(bridge.storage);
-  var runShell = function (cmd) { return bridge.shell.run(cmd); };
+  var runShell = function (cmd) { return bridge.shell.run(loginShellCommand(cmd)); };
   var SEARCH_THRESHOLD = 12;
   var INSTALL_CMD = 'if [ -w "$(gem env gemdir 2>/dev/null)" ]; then gem install kamal; else gem install kamal --user-install; fi';
 
@@ -235,6 +239,8 @@
   }
 
   function freshTerminal() {
+    if (!window.Terminal) throw new Error("xterm.js did not load");
+    if (!window.FitAddon || !window.FitAddon.FitAddon) throw new Error("xterm fit addon did not load");
     if (term) {
       term.dispose();
       term = null;
@@ -254,8 +260,9 @@
   async function runCommand(cmd) {
     if (cmd.confirm && !confirm("Run: kamal " + cmd.args.join(" ") + " ?")) return;
     state.selectedId = cmd.id;
-    var t = freshTerminal();
+    var t;
     try {
+      t = freshTerminal();
       await t.open(state.workDir);
     } catch (err) {
       bridge.ui.toast("Could not open terminal: " + (err && err.message ? err.message : String(err)), "error");
@@ -267,8 +274,9 @@
   }
 
   async function installKamal(installCmd) {
-    var t = freshTerminal();
+    var t;
     try {
+      t = freshTerminal();
       await t.open(state.workDir);
     } catch (err) {
       bridge.ui.toast("Could not open terminal: " + (err && err.message ? err.message : String(err)), "error");

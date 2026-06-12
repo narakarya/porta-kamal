@@ -1,6 +1,6 @@
 {
   "name": "porta-kamal",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "type": "module",
   "description": "Kamal deploy extension for Porta.",
