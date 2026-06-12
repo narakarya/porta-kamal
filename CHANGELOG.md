@@ -5,6 +5,14 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.5] — 2026-06-13
+
+### Fixed
+
+- Detect an installed Kamal executable with `command -v kamal` before reading
+  its version, so a non-zero `kamal version`/`kamal --version` result does not
+  incorrectly show `kamal not found` while commands are otherwise runnable.
+
 ## [0.1.4] — 2026-06-13
 
 ### Fixed

@@ -49,9 +49,17 @@ bridge.ui.setTitle("Kamal — " + bridge.app.name);
 
 // ── data loading ──────────────────────────────────────────────────────────
 async function checkKamal() {
-  const r = await runShell("kamal version");
-  state.installed = r.code === 0;
-  state.version = state.installed ? (r.stdout.trim().split("\n").pop() || "").trim() : null;
+  const found = await runShell("command -v kamal");
+  const path = (found.stdout || "").trim().split("\n").pop() || "";
+  state.installed = found.code === 0 && !!path;
+  if (!state.installed) {
+    state.version = null;
+    return;
+  }
+
+  const version = await runShell("kamal version 2>/dev/null || kamal --version 2>/dev/null || true");
+  const label = ((version.stdout || version.stderr || "").trim().split("\n").pop() || path).trim();
+  state.version = label.replace(/^kamal\s+/i, "");
 }
 
 async function loadConfig() {
