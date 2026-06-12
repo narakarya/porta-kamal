@@ -110,6 +110,34 @@ html, body {
   margin-bottom: 8px;
 }
 
+.confirm-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  background: #111113;
+  border: 1px solid #3f3f46;
+  border-radius: 6px;
+}
+
+.confirm-copy {
+  min-width: 0;
+  color: #e4e4e7;
+  font-size: 12px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .output-title {
   display: flex;
   align-items: center;
@@ -249,6 +277,7 @@ html, body {
   border-left: 2px solid transparent;
   font-family: inherit;
   text-align: left;
+  gap: 6px;
 }
 
 .cmd-row:hover {
@@ -272,6 +301,41 @@ html, body {
 
 .cmd-row.selected .cmd-label {
   color: #93c5fd;
+}
+
+.cmd-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.cmd-action-btn {
+  padding: 2px 7px;
+  border: 1px solid #3f3f46;
+  border-radius: 999px;
+  background: #18181b;
+  color: #d4d4d8;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.cmd-action-btn:hover {
+  background: #27272a;
+  color: #f4f4f5;
+}
+
+.cmd-action-btn.danger {
+  border-color: #7f1d1d;
+  background: #2a1111;
+  color: #fecaca;
+}
+
+.cmd-action-btn.danger:hover {
+  border-color: #ef4444;
+  background: #451313;
+  color: #fff1f2;
 }
 
 /* icon buttons (edit / delete) — hidden until row is hovered */

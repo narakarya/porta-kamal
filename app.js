@@ -17,7 +17,7 @@ const sidebarEl = $("sidebar");
 const statusEl = $("status-bar");
 const outputHostEl = $("output-host");
 
-const APP_VERSION = "0.2.4";
+const APP_VERSION = "0.2.5";
 const rootDir = bridge.app.rootDir;
 const custom = new CustomStore(bridge.storage);
 const runShell = (cmd, opts = {}) => bridge.shell.run(loginShellCommand(cmd), opts);
@@ -49,6 +49,7 @@ const state = {
   search: "",
   selectedId: null,
   editingCustomId: null,
+  pendingAction: null,
   run: null,
 };
 let runCounter = 0;
@@ -127,6 +128,16 @@ async function runCommand(cmd) {
     return;
   }
   state.selectedId = cmd.id;
+  if (cmd.confirm) {
+    state.pendingAction = {
+      title: cmd.label,
+      command: kamalCommandLine(cmd),
+      displayCommand: kamalDisplayLine(cmd),
+    };
+    renderStatus();
+    renderOutput();
+    return;
+  }
   await runTask({
     title: cmd.label,
     command: kamalCommandLine(cmd),
@@ -134,6 +145,25 @@ async function runCommand(cmd) {
     timeout: COMMAND_TIMEOUT,
   });
   renderSidebar();
+}
+
+async function runPendingAction() {
+  const pending = state.pendingAction;
+  if (!pending || isRunning()) return;
+  state.pendingAction = null;
+  await runTask({
+    title: pending.title,
+    command: pending.command,
+    displayCommand: pending.displayCommand,
+    timeout: COMMAND_TIMEOUT,
+  });
+  renderSidebar();
+}
+
+function cancelPendingAction() {
+  state.pendingAction = null;
+  renderStatus();
+  renderOutput();
 }
 
 async function installKamal() {
@@ -248,13 +278,30 @@ function renderStatus() {
 function renderOutput() {
   outputHostEl.innerHTML = "";
   const run = state.run;
-  if (!run) {
-    outputHostEl.append(
-      el("div", { className: "empty-state" }, [
-        el("div", { className: "empty-title", textContent: "Select a Kamal command" }),
-        el("div", { className: "empty-copy", textContent: "Results, errors, and command output will appear here." }),
+  const pending = state.pendingAction;
+  if (pending) {
+    const runBtn = el("button", { className: "btn primary", textContent: "Run", type: "button" });
+    const cancelBtn = el("button", { className: "btn", textContent: "Cancel", type: "button" });
+    const bar = el("div", { className: "confirm-bar" }, [
+      el("div", { className: "confirm-copy", textContent: `Run ${pending.displayCommand}?` }),
+      el("div", { className: "confirm-actions" }, [
+        runBtn,
+        cancelBtn,
       ]),
-    );
+    ]);
+    runBtn.onclick = runPendingAction;
+    cancelBtn.onclick = cancelPendingAction;
+    outputHostEl.append(bar);
+  }
+  if (!run) {
+    if (!pending) {
+      outputHostEl.append(
+        el("div", { className: "empty-state" }, [
+          el("div", { className: "empty-title", textContent: "Select a Kamal command" }),
+          el("div", { className: "empty-copy", textContent: "Results, errors, and command output will appear here." }),
+        ]),
+      );
+    }
     return;
   }
 
@@ -337,15 +384,47 @@ function renderCommandList() {
         className: "cmd-row" + (cmd.id === state.selectedId ? " selected" : ""),
       });
       row.append(el("span", { className: "cmd-label", textContent: cmd.label }));
-      row.onclick = () => runCommand(cmd);
+      const actions = el("div", { className: "cmd-actions" });
+      if (cmd.confirm) {
+        const confirm = el("button", { className: "cmd-action-btn danger", textContent: "Confirm", type: "button" });
+        confirm.onclick = (e) => {
+          e.stopPropagation();
+          state.selectedId = cmd.id;
+          state.pendingAction = {
+            title: cmd.label,
+            command: kamalCommandLine(cmd),
+            displayCommand: kamalDisplayLine(cmd),
+          };
+          renderStatus();
+          renderOutput();
+          renderSidebar();
+        };
+        actions.append(confirm);
+      }
+      row.onclick = () => {
+        if (cmd.confirm) {
+          state.selectedId = cmd.id;
+          state.pendingAction = {
+            title: cmd.label,
+            command: kamalCommandLine(cmd),
+            displayCommand: kamalDisplayLine(cmd),
+          };
+          renderStatus();
+          renderOutput();
+          renderSidebar();
+          return;
+        }
+        runCommand(cmd);
+      };
       if (cmd.group === "Custom") {
         const id = cmd.id.replace(/^custom-/, "");
         const edit = el("button", { className: "icon-btn", textContent: "Edit", title: "Edit", type: "button" });
         edit.onclick = (e) => { e.stopPropagation(); openCustomForm(id); };
         const del = el("button", { className: "icon-btn", textContent: "Del", title: "Delete", type: "button" });
         del.onclick = async (e) => { e.stopPropagation(); await custom.remove(id); await rebuildCommands(); renderSidebar(); };
-        row.append(edit, del);
+        actions.append(edit, del);
       }
+      row.append(actions);
       listEl.append(row);
     }
   }

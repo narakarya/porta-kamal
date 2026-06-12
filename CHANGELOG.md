@@ -5,6 +5,14 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.2.5] — 2026-06-13
+
+### Fixed
+
+- Add an explicit in-panel confirm bar for destructive commands like Deploy,
+  Rollback, Restart, and Server Reboot.
+- Keep the startup status neutral while Kamal detection is still running.
+
 ## [0.2.4] — 2026-06-13
 
 ### Fixed

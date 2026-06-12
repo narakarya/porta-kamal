@@ -14,7 +14,7 @@ narakarya/porta-kamal
 
 Pin a version:
 ```
-narakarya/porta-kamal@v0.2.4
+narakarya/porta-kamal@v0.2.5
 ```
 
 ## Features
