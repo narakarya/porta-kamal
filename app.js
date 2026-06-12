@@ -3,7 +3,7 @@ import { parseAccessories } from "./lib/accessories.js";
 import { FIXED_COMMANDS, buildAccessoryCommands, groupCommands } from "./lib/commands.js";
 import { CustomStore } from "./lib/custom.js";
 import { detectConfigPath } from "./lib/config.js";
-import { loginShellCommand, shellJoin, shellQuote } from "./lib/shell.js";
+import { commandWithArgs, loginShellCommand, parseAliasCommand, shellJoin, shellQuote, stripDockerTty } from "./lib/shell.js";
 
 const bridge = window.portaBridge;
 const $ = (id) => document.getElementById(id);
@@ -17,7 +17,7 @@ const sidebarEl = $("sidebar");
 const statusEl = $("status-bar");
 const outputHostEl = $("output-host");
 
-const APP_VERSION = "0.2.1";
+const APP_VERSION = "0.2.2";
 const rootDir = bridge.app.rootDir;
 const custom = new CustomStore(bridge.storage);
 const runShell = (cmd, opts = {}) => bridge.shell.run(loginShellCommand(cmd), opts);
@@ -39,6 +39,8 @@ const INSTALL_CMD =
 const state = {
   installed: false,
   version: null,
+  kamalCommand: "kamal",
+  kamalDisplay: "kamal",
   configPath: null,
   workDir: rootDir,
   accessories: [],
@@ -53,13 +55,27 @@ let runCounter = 0;
 bridge.ui.setTitle("Kamal - " + bridge.app.name);
 
 async function checkKamal() {
+  const alias = await runShell("alias kamal 2>/dev/null || true");
+  const aliasCommand = parseAliasCommand(alias.stdout || alias.stderr || "", "kamal");
+  if (aliasCommand) {
+    state.installed = true;
+    state.kamalCommand = stripDockerTty(aliasCommand);
+    state.kamalDisplay = "kamal";
+    state.version = aliasCommand.includes("docker run") ? "docker image" : "alias";
+    return;
+  }
+
   const found = await runShell("command -v kamal");
   const path = (found.stdout || "").trim().split("\n").pop() || "";
   state.installed = found.code === 0 && !!path;
   if (!state.installed) {
     state.version = null;
+    state.kamalCommand = "kamal";
+    state.kamalDisplay = "kamal";
     return;
   }
+  state.kamalCommand = "kamal";
+  state.kamalDisplay = "kamal";
 
   const version = await runShell("kamal version 2>/dev/null || kamal --version 2>/dev/null || true");
   const label = ((version.stdout || version.stderr || "").trim().split("\n").pop() || path).trim();
@@ -86,7 +102,11 @@ async function rebuildCommands() {
 }
 
 function kamalCommandLine(cmd) {
-  return shellJoin(["kamal", ...cmd.args]);
+  return commandWithArgs(state.kamalCommand, cmd.args);
+}
+
+function kamalDisplayLine(cmd) {
+  return shellJoin([state.kamalDisplay, ...cmd.args]);
 }
 
 function isRunning() {
@@ -95,11 +115,12 @@ function isRunning() {
 
 async function runCommand(cmd) {
   if (isRunning() && !confirm("A command is still running. Start another command anyway?")) return;
-  if (cmd.confirm && !confirm(`Run: ${kamalCommandLine(cmd)} ?`)) return;
+  if (cmd.confirm && !confirm(`Run: ${kamalDisplayLine(cmd)} ?`)) return;
   state.selectedId = cmd.id;
   await runTask({
     title: cmd.label,
     command: kamalCommandLine(cmd),
+    displayCommand: kamalDisplayLine(cmd),
     timeout: COMMAND_TIMEOUT,
   });
   renderSidebar();
@@ -118,12 +139,13 @@ async function installKamal() {
   });
 }
 
-async function runTask({ title, command, timeout, onDone }) {
+async function runTask({ title, command, displayCommand, timeout, onDone }) {
   const id = ++runCounter;
   state.run = {
     id,
     title,
     command,
+    displayCommand: displayCommand || command,
     cwd: state.workDir,
     status: "running",
     code: null,
@@ -225,9 +247,8 @@ function renderOutput() {
     el("span", { textContent: run.title }),
     el("span", { className: "run-pill " + run.status, textContent: run.status }),
   ]);
-  const meta = el("div", { className: "output-meta", textContent: run.command });
-  const cwd = el("div", { className: "output-cwd", textContent: "cwd: " + run.cwd });
-  header.append(title, meta, cwd);
+  header.title = run.displayCommand;
+  header.append(title);
   outputHostEl.append(header);
 
   if (run.error) outputHostEl.append(el("pre", { className: "output-block stderr", textContent: run.error }));

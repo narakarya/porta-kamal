@@ -5,6 +5,16 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.2.2] — 2026-06-13
+
+### Fixed
+
+- Support Docker-based `kamal` aliases by stripping TTY flags from aliases such
+  as `docker run -it ... ghcr.io/basecamp/kamal:latest` before running commands
+  from Porta's non-TTY shell bridge.
+- Simplify the output header so it does not show long Docker command lines by
+  default.
+
 ## [0.2.1] — 2026-06-13
 
 ### Fixed
