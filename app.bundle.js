@@ -160,10 +160,19 @@ const sidebarEl = $("sidebar");
 const statusEl = $("status-bar");
 const outputHostEl = $("output-host");
 
+const APP_VERSION = "0.2.1";
 const rootDir = bridge.app.rootDir;
 const custom = new CustomStore(bridge.storage);
 const runShell = (cmd, opts = {}) => bridge.shell.run(loginShellCommand(cmd), opts);
-const spawnShell = (cmd, opts = {}, callbacks = {}) => bridge.shell.spawn(loginShellCommand(cmd), opts, callbacks);
+const spawnShell = (cmd, opts = {}, callbacks = {}) => {
+  const wrapped = loginShellCommand(cmd);
+  if (bridge.shell.spawn) return bridge.shell.spawn(wrapped, opts, callbacks);
+  return bridge.shell.run(wrapped, opts).then((result) => {
+    for (const line of (result.stdout || "").split("\n").filter(Boolean)) callbacks.onStdout?.(line);
+    for (const line of (result.stderr || "").split("\n").filter(Boolean)) callbacks.onStderr?.(line);
+    return result;
+  });
+};
 
 const SEARCH_THRESHOLD = 12;
 const COMMAND_TIMEOUT = 15 * 60 * 1000;
@@ -331,6 +340,7 @@ function renderStatus() {
   left.append(recheck);
 
   const right = el("div", { className: "status-right" });
+  right.append(el("span", { className: "cfg-pill", textContent: "v" + APP_VERSION }));
   if (state.configPath) {
     right.append(el("span", { className: "cfg-pill", title: state.configPath, textContent: state.configPath.replace(rootDir + "/", "") }));
   }

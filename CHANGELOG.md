@@ -5,6 +5,15 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-06-13
+
+### Fixed
+
+- Show the extension runtime version in the status bar so stale Porta extension
+  caches are visible immediately.
+- Fall back to non-streaming `shell.run` when the active Porta build does not
+  expose `bridge.shell.spawn`.
+
 ## [0.2.0] — 2026-06-13
 
 ### Changed
